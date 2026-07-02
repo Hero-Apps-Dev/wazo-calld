@@ -53,7 +53,7 @@ class CallsReader(User):
     """Spams GET /users/me/calls (the ARI-amplifying HTTP endpoint)."""
 
     weight = 10
-    wait_time = between(0, 0.05)
+    wait_time = between(1, 60)
 
     def on_start(self):
         self._calld = CalldClient(
@@ -88,7 +88,7 @@ class DialMobileFlooder(User):
     """Publishes synthetic dial events, accruing dial_mobile polling threads."""
 
     weight = 1
-    wait_time = between(0.2, 0.5)
+    wait_time = between(1, 60)
 
     def on_start(self):
         self._publisher = DialMobileEventPublisher(RABBITMQ_HOST, RABBITMQ_PORT)
