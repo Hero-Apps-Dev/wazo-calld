@@ -1,4 +1,4 @@
-# Copyright 2018-2024 The Wazo Authors  (see the AUTHORS file)
+# Copyright 2018-2026 The Wazo Authors  (see the AUTHORS file)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import logging
@@ -151,7 +151,7 @@ class ApplicationService:
         node = make_node_from_bridge(bridge.get())
         return node
 
-    def get_application(self, application_uuid):
+    def get_application(self, application_uuid, tenant_uuid=None):
         try:
             application = self._ari.applications.get(
                 applicationName=AppNameHelper.to_name(application_uuid)
@@ -165,6 +165,8 @@ class ApplicationService:
         application['destination_node_uuid'] = node_uuid
         application['uuid'] = application_uuid
         application['tenant_uuid'] = confd_app['tenant_uuid']
+        if tenant_uuid and application['tenant_uuid'] != tenant_uuid:
+            raise NoSuchApplication(application_uuid)
         return application
 
     def get_call_id(self, application, call_id, status_code=404):
@@ -334,6 +336,7 @@ class ApplicationService:
             originate_kwargs['callerId'] = callerid
 
         variables = variables or {}
+        variables['WAZO_TENANT_UUID'] = application['tenant_uuid']
         if autoanswer:
             variables['WAZO_AUTO_ANSWER'] = '1'
 
@@ -385,8 +388,7 @@ class ApplicationService:
         if not Channel(snooping_call_id, self._ari).is_in_stasis():
             raise CallNotInApplication(application['uuid'], snooping_call_id)
 
-        if not Channel(snooped_call_id, self._ari).is_in_stasis():
-            raise CallNotInApplication(application['uuid'], snooped_call_id)
+        self._validate_snooped_call_ownership(application, snooped_call_id)
 
         snoop = self._snoop_helper.create(
             application,
@@ -401,6 +403,11 @@ class ApplicationService:
         return self._snoop_helper.delete(application, snoop_uuid)
 
     def snoop_edit(self, application, snoop_uuid, whisper_mode):
+        snoop = self._snoop_helper.get(application, snoop_uuid)
+        self._validate_snooped_call_ownership(
+            application,
+            snoop.snooped_call_id,
+        )
         snoop = self._snoop_helper.edit(application, snoop_uuid, whisper_mode)
         return snoop
 
@@ -411,6 +418,16 @@ class ApplicationService:
     def snoop_list(self, application):
         snoops = self._snoop_helper.list_(application)
         return snoops
+
+    def _validate_snooped_call_ownership(self, application, snooped_call_id):
+        try:
+            channel = self._ari.channels.get(channelId=snooped_call_id)
+        except ARINotFound:
+            raise NoSuchCall(snooped_call_id)
+
+        tenant_uuid = channel.json.get('channelvars', {}).get('WAZO_TENANT_UUID')
+        if not tenant_uuid or tenant_uuid != application['tenant_uuid']:
+            raise NoSuchCall(snooped_call_id)
 
     def start_call_hold(self, call_id):
         try:

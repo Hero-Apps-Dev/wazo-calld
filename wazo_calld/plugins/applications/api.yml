@@ -1,5 +1,7 @@
 paths:
   /applications/{application_uuid}:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     get:
       summary: Show an application
       description: '**Required ACL:** `calld.applications.{application_uuid}.read`'
@@ -20,6 +22,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     get:
       summary: List calls from the application
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.read`'
@@ -64,6 +68,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     delete:
       summary: Hangup a call from the application
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.delete`'
@@ -83,6 +89,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/hold/start:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Place a call on hold
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.hold.start.update`'
@@ -102,6 +110,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/hold/stop:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Resume a call that has been placed on hold
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.hold.stop.update'
@@ -121,6 +131,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/moh/{moh_uuid}/start:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Starts playing a music on hold
       description: |
@@ -145,6 +157,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/moh/stop:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Stops playing a music on hold
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.moh.{moh_uuid}.stop.update'
@@ -164,6 +178,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/mute/start:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Mute a call
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.mute.start.update`'
@@ -183,6 +199,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/mute/stop:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Unmute a call
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.mute.stop.update`'
@@ -202,6 +220,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/answer:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Answer a call
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.answer.update`'
@@ -221,6 +241,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/progress/start:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Play the progress ringing tone
       description: |
@@ -243,6 +265,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/progress/stop:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Stop playing the progress ringing tone.
       description: |
@@ -270,6 +294,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/playbacks:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     post:
       summary: Play file to the call
       description: |
@@ -311,6 +337,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/snoops:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     post:
       summary: Start snooping on a call
       description: |
@@ -352,6 +380,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/calls/{call_id}/dtmf:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Simulate a user pressing DTMF keys
       description: '**Required ACL:** `calld.applications.{application_uuid}.calls.{call_id}.dtmf.update'
@@ -372,6 +402,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/nodes:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     get:
       summary: List nodes from the application
       description: '**Required ACL:** `calld.applications.{application_uuid}.nodes.read`'
@@ -422,6 +454,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/nodes/{node_uuid}:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     get:
       summary: Show a node
       description: '**Required ACL:** `calld.applications.{application_uuid}.nodes.{node_uuid}.read`'
@@ -463,6 +497,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/nodes/{node_uuid}/calls:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     post:
       summary: Make a new call to the node
       description: '**Required ACL:** `calld.applications.{application_uuid}.nodes.{node_uuid}.calls.create`'
@@ -494,6 +530,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/nodes/{node_uuid}/calls/user:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     post:
       summary: Initiate a call to a user and insert it in the node
       description: '**Required ACL:** `calld.applications.{application_uuid}.nodes.{node_uuid}.calls.user.create`'
@@ -525,6 +563,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/nodes/{node_uuid}/calls/{call_id}:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     put:
       summary: Insert call to the node
       description: '**Required ACL:** `calld.applications.{application_uuid}.nodes.{node_uuid}.calls.{call_id}.update`'
@@ -563,6 +603,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/playbacks/{playback_uuid}:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     delete:
       summary: Stop and remove playback
       description: '**Required ACL:** `calld.applications.{application_uuid}.playbacks.{playback_uuid}.delete`'
@@ -582,6 +624,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/snoops:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     get:
       summary: List active snoops
       description: '**Required ACL:** `calld.applications.{application_uuid}.snoops.read`'
@@ -602,6 +646,8 @@ paths:
           $ref: '#/responses/AnotherServiceUnavailable'
 
   /applications/{application_uuid}/snoops/{snoop_uuid}:
+    parameters:
+    - $ref: '#/parameters/TenantUUID'
     get:
       summary: View snooping parameters
       description: '**Required ACL:** `calld.applications.{application_uuid}.snoops.{snoop_uuid}.read`'
