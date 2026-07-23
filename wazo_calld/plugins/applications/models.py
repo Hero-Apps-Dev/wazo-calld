@@ -1,4 +1,4 @@
-# Copyright 2018-2024 The Wazo Authors  (see the AUTHORS file)
+# Copyright 2018-2026 The Wazo Authors  (see the AUTHORS file)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
@@ -293,7 +293,7 @@ class SnoopHelper:
         self._ari = ari
 
     def create(self, application, snooped_call_id, snooping_call_id, whisper_mode):
-        self.validate_ownership(application, snooped_call_id, snooping_call_id)
+        self.validate_snooping_call_ownership(application, snooping_call_id)
 
         snoop = _Snoop(application, snooped_call_id, snooping_call_id)
         try:
@@ -312,7 +312,10 @@ class SnoopHelper:
 
     def edit(self, application, snoop_uuid, whisper_mode):
         snoop = self.get(application, snoop_uuid)
-        self.validate_ownership(application, snoop.snooped_call_id)
+        self.validate_snooping_call_ownership(
+            application,
+            snoop.snooping_call_id,
+        )
 
         snoop_channel = snoop.new_snoop_channel(self._ari, whisper_mode)
         snoop.update_snoop_channel(snoop_channel)
@@ -348,8 +351,6 @@ class SnoopHelper:
             if bridge.json['name'] == bridge_name:
                 yield bridge
 
-    def validate_ownership(self, application, snooped_call_id, snooping_call_id=None):
-        if snooped_call_id not in application['channel_ids']:
-            raise NoSuchCall(snooped_call_id, status_code=404)
-        if snooping_call_id and snooping_call_id not in application['channel_ids']:
+    def validate_snooping_call_ownership(self, application, snooping_call_id):
+        if snooping_call_id not in application['channel_ids']:
             raise NoSuchCall(snooping_call_id, status_code=400)

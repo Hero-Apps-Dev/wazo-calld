@@ -1,6 +1,7 @@
 # Copyright 2018-2026 The Wazo Authors  (see the AUTHORS file)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import requests
 from ari.exceptions import ARIServerError
 from hamcrest import (
     assert_that,
@@ -23,7 +24,12 @@ from wazo_test_helpers.hamcrest.raises import raises
 from wazo_test_helpers.hamcrest.uuid_ import uuid_
 
 from .helpers.confd import MockApplication, MockMoh, MockUser
-from .helpers.constants import ENDPOINT_AUTOANSWER, VALID_TENANT
+from .helpers.constants import (
+    CALLD_SERVICE_TENANT,
+    CALLD_SERVICE_TOKEN,
+    ENDPOINT_AUTOANSWER,
+    VALID_TENANT,
+)
 from .helpers.real_asterisk import RealAsteriskIntegrationTest
 from .helpers.wait_strategy import (
     CalldAndAsteriskAndAmidWaitStrategy,
@@ -63,7 +69,6 @@ class BaseApplicationTestCase(RealAsteriskIntegrationTest):
         self.moh_uuid = '60f123e6-147b-487c-b08a-36395d43346e'
         moh = MockMoh(self.moh_uuid)
         self.confd.set_moh(moh)
-
         # TODO: add a way to load new apps without restarting
         self._restart_calld()
         CalldAndAsteriskAndAmidWaitStrategy().wait(self)
@@ -95,6 +100,7 @@ class BaseApplicationTestCase(RealAsteriskIntegrationTest):
             'variables': {
                 'variables': {
                     'WAZO_CHANNEL_DIRECTION': 'to-wazo',
+                    'WAZO_TENANT_UUID': VALID_TENANT,
                 },
             },
         }
@@ -450,7 +456,6 @@ class TestStasisTriggers(BaseApplicationTestCase):
     def test_confd_application_deleted_event_then_application_deleted(self):
         # self.ari.bridges.destroy(bridgeId=self.node_app_uuid)
         # event_accumulator = self.app_event_accumulator(self.no_node_app_uuid)
-
         self.bus.send_application_deleted_event(self.no_node_app_uuid)
 
         application_name = f'wazo-app-{self.no_node_app_uuid}'
@@ -486,6 +491,22 @@ class TestApplication(BaseApplicationTestCase):
             application,
             has_entries(destination_node_uuid=None),
         )
+
+    def test_get_scopes_application_to_explicit_tenant_header(self):
+        url = self.calld_client.url('applications', self.node_app_uuid)
+        service_headers = {'X-Auth-Token': CALLD_SERVICE_TOKEN}
+
+        owning_tenant = requests.get(
+            url,
+            headers={**service_headers, 'Wazo-Tenant': VALID_TENANT},
+        )
+        foreign_tenant = requests.get(
+            url,
+            headers={**service_headers, 'Wazo-Tenant': CALLD_SERVICE_TENANT},
+        )
+
+        assert_that(owning_tenant.status_code, equal_to(200))
+        assert_that(foreign_tenant.status_code, equal_to(404))
 
     def test_confd_application_created_event_update_cache(self):
         app_uuid = '00000000-0000-0000-0000-000000000001'
@@ -1149,7 +1170,6 @@ class TestApplication(BaseApplicationTestCase):
         assert_that(
             nodes, contains_exactly(has_entries(uuid=self.node_app_uuid, calls=empty()))
         )
-
         # TODO: replace precondition with POST /applications/uuid/nodes/uuid/calls
         channel = self.call_app(self.node_app_uuid)
 
@@ -1641,7 +1661,6 @@ class TestApplicationSnoop(BaseApplicationTestCase):
             self.caller_channel.id,
             snoop_2_args,
         )
-
         # Test snoop being created (snoop bridge with no channels) does not cause errors
         self.ari.bridges.create(name=f'wazo-app-snoop-{self.app_uuid}')
 
@@ -1690,6 +1709,31 @@ class TestApplicationSnoop(BaseApplicationTestCase):
 
     def test_post_snoop(self):
         unrelated_channel = self.call_app(self.node_app_uuid)
+        unrelated_supervisor_channel = self.calld_client.applications.make_call(
+            self.app_uuid,
+            {'context': 'local', 'exten': 'recipient_autoanswer'},
+        )
+        unrelated_snoop_args = {
+            'whisper_mode': 'none',
+            'snooping_call_id': unrelated_supervisor_channel['id'],
+        }
+        unrelated_snoop = self.calld_client.applications.snoops(
+            self.app_uuid,
+            unrelated_channel.id,
+            unrelated_snoop_args,
+        )
+        assert_that(
+            unrelated_snoop,
+            has_entries(
+                snooped_call_id=unrelated_channel.id,
+                snooping_call_id=unrelated_supervisor_channel['id'],
+            ),
+        )
+        self.calld_client.applications.delete_snoop(
+            self.app_uuid,
+            unrelated_snoop['uuid'],
+        )
+
         supervisor_channel = self.calld_client.applications.make_call(
             self.app_uuid,
             {'context': 'local', 'exten': 'recipient_autoanswer'},
@@ -1703,14 +1747,6 @@ class TestApplicationSnoop(BaseApplicationTestCase):
             calling(self.calld_client.applications.snoops).with_args(
                 self.unknown_uuid,
                 self.caller_channel.id,
-                snoop_args,
-            ),
-            raises(CalldError).matching(has_properties(status_code=404)),
-        )
-        assert_that(
-            calling(self.calld_client.applications.snoops).with_args(
-                self.app_uuid,
-                unrelated_channel.id,
                 snoop_args,
             ),
             raises(CalldError).matching(has_properties(status_code=404)),
@@ -1798,6 +1834,88 @@ class TestApplicationSnoop(BaseApplicationTestCase):
                     ),
                 ),
             ),
+        )
+
+    def test_post_snoop_on_same_tenant_call_outside_stasis(self):
+        _, target_call_id = self.given_bridged_call_not_stasis()
+        supervisor_channel = self.calld_client.applications.make_call(
+            self.app_uuid,
+            {'context': 'local', 'exten': 'recipient_autoanswer'},
+        )
+        snoop_args = {
+            'whisper_mode': 'none',
+            'snooping_call_id': supervisor_channel['id'],
+        }
+
+        snoop = self.calld_client.applications.snoops(
+            self.app_uuid,
+            target_call_id,
+            snoop_args,
+        )
+
+        assert_that(
+            snoop,
+            has_entries(
+                snooped_call_id=target_call_id,
+                snooping_call_id=supervisor_channel['id'],
+                whisper_mode='none',
+            ),
+        )
+
+    def test_post_snoop_rejects_foreign_tenant_call_outside_stasis(self):
+        _, target_call_id = self.given_bridged_call_not_stasis(
+            caller_variables={
+                '__WAZO_TENANT_UUID': CALLD_SERVICE_TENANT,
+            }
+        )
+        supervisor_channel = self.calld_client.applications.make_call(
+            self.app_uuid,
+            {'context': 'local', 'exten': 'recipient_autoanswer'},
+        )
+        snoop_args = {
+            'whisper_mode': 'none',
+            'snooping_call_id': supervisor_channel['id'],
+        }
+
+        assert_that(
+            calling(self.calld_client.applications.snoops).with_args(
+                self.app_uuid,
+                target_call_id,
+                snoop_args,
+            ),
+            raises(CalldError).matching(has_properties(status_code=404)),
+        )
+        assert_that(
+            self.calld_client.applications.list_snoops(self.app_uuid),
+            has_entries(items=empty()),
+        )
+
+    def test_post_snoop_rejects_call_without_tenant_outside_stasis(self):
+        _, target_call_id = self.given_bridged_call_not_stasis(
+            caller_variables={
+                '__WAZO_TENANT_UUID': '',
+            }
+        )
+        supervisor_channel = self.calld_client.applications.make_call(
+            self.app_uuid,
+            {'context': 'local', 'exten': 'recipient_autoanswer'},
+        )
+        snoop_args = {
+            'whisper_mode': 'none',
+            'snooping_call_id': supervisor_channel['id'],
+        }
+
+        assert_that(
+            calling(self.calld_client.applications.snoops).with_args(
+                self.app_uuid,
+                target_call_id,
+                snoop_args,
+            ),
+            raises(CalldError).matching(has_properties(status_code=404)),
+        )
+        assert_that(
+            self.calld_client.applications.list_snoops(self.app_uuid),
+            has_entries(items=empty()),
         )
 
     def test_put(self):
@@ -3123,7 +3241,6 @@ class TestApplicationSendDTMF(BaseApplicationTestCase):
     def test_put_dtmf(self):
         app_uuid = self.node_app_uuid
         channel = self.call_app(app_uuid)
-
         # Unknown channel ID
         assert_that(
             calling(self.calld_client.applications.send_dtmf_digits).with_args(
@@ -3131,7 +3248,6 @@ class TestApplicationSendDTMF(BaseApplicationTestCase):
             ),
             raises(CalldError).matching(has_properties(status_code=404)),
         )
-
         # Unknown app UUID
         assert_that(
             calling(self.calld_client.applications.send_dtmf_digits).with_args(
@@ -3139,7 +3255,6 @@ class TestApplicationSendDTMF(BaseApplicationTestCase):
             ),
             raises(CalldError).matching(has_properties(status_code=404)),
         )
-
         # Invalid DTMF
         assert_that(
             calling(self.calld_client.applications.send_dtmf_digits).with_args(
@@ -3153,7 +3268,6 @@ class TestApplicationSendDTMF(BaseApplicationTestCase):
                 'name': 'DTMFEnd',
             }
         )
-
         # Valid DTMF
         test_str = '12*#'
         self.calld_client.applications.send_dtmf_digits(app_uuid, channel.id, test_str)
