@@ -8,8 +8,8 @@ from ..plugin import ApplicationRegistrationReconciler
 
 class TestApplicationRegistrationReconciler(TestCase):
     def test_retries_after_a_transient_failure(self):
-        attempts = []
-        reconciler = None
+        attempts: list[None] = []
+        reconciler = ApplicationRegistrationReconciler(lambda: None, interval=0)
 
         def callback():
             attempts.append(None)
@@ -17,7 +17,7 @@ class TestApplicationRegistrationReconciler(TestCase):
                 raise RuntimeError('transient failure')
             reconciler._should_stop.set()
 
-        reconciler = ApplicationRegistrationReconciler(callback, interval=0)
+        reconciler._callback = callback
 
         reconciler._run()
 

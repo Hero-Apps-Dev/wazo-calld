@@ -119,9 +119,7 @@ class Plugin:
             confd_apps_cache,
             moh_cache,
         )
-        application_reconciler = ApplicationRegistrationReconciler(
-            stasis.initialize
-        )
+        application_reconciler = ApplicationRegistrationReconciler(stasis.initialize)
         confd_is_ready_thread = ConfdIsReadyThread(confd_client)
         startup_callback_collector = CallbackCollector()
         next_token_changed_subscribe(startup_callback_collector.new_source())
