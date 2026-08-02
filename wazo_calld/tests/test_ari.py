@@ -2,11 +2,54 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from ari.exceptions import ARINotFound
 
-from wazo_calld.ari_ import CoreARI
+from wazo_calld.ari_ import ARIClientProxy, CoreARI
+
+
+class TestARIClientProxy(TestCase):
+    @patch('wazo_calld.ari_.swaggerpy.http_client.SynchronousHttpClient')
+    @patch('wazo_calld.ari_.ari.client.Client.__init__')
+    def test_init_retries_until_all_required_repositories_are_available(
+        self, client_init, http_client_class
+    ):
+        client = ARIClientProxy('http://asterisk:5039/ari', 'username', 'password')
+        rejected_swagger = Mock()
+
+        def initialize_repositories(*_args):
+            if client_init.call_count == 1:
+                client.swagger = rejected_swagger
+                client.repositories = {
+                    'applications': Mock(),
+                    'channels': Mock(),
+                }
+            else:
+                client.swagger = Mock()
+                client.repositories = {
+                    'amqp': Mock(),
+                    'applications': Mock(),
+                    'channels': Mock(),
+                }
+
+        client_init.side_effect = initialize_repositories
+        client.on_channel_event = Mock()
+
+        self.assertFalse(client.init())
+        self.assertFalse(client._initialized)
+        rejected_swagger.close.assert_called_once_with()
+
+        self.assertTrue(client.init())
+        self.assertTrue(client.init())
+        self.assertTrue(client._initialized)
+        self.assertEqual(client_init.call_count, 2)
+        client.on_channel_event.assert_called_once_with(
+            'ChannelDestroyed', client.repositories['channels'].on_hang_up
+        )
+        http_client_class.return_value.set_basic_auth.assert_called_with(
+            'asterisk', 'username', 'password'
+        )
 
 
 class TestCoreARIApplicationRegistration(TestCase):

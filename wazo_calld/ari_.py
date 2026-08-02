@@ -170,6 +170,8 @@ class CachingRepository:
 
 
 class ARIClientProxy(ari.client.Client):
+    REQUIRED_REPOSITORIES = {'amqp', 'applications', 'channels'}
+
     def __init__(self, base_url, username, password):
         self._base_url = base_url
         self._username = username
@@ -178,20 +180,30 @@ class ARIClientProxy(ari.client.Client):
         self._registered_app = set()
 
     def init(self):
-        if not self._initialized:
-            split = urllib.parse.urlsplit(self._base_url)
-            http_client = swaggerpy.http_client.SynchronousHttpClient()
-            http_client.set_basic_auth(split.hostname, self._username, self._password)
-            super().__init__(self._base_url, http_client)
-            self._initialized = True
+        if self._initialized:
+            return True
+
+        split = urllib.parse.urlsplit(self._base_url)
+        http_client = swaggerpy.http_client.SynchronousHttpClient()
+        http_client.set_basic_auth(split.hostname, self._username, self._password)
+        super().__init__(self._base_url, http_client)
+        missing_repositories = self.REQUIRED_REPOSITORIES.difference(self.repositories)
+        if missing_repositories:
+            logger.warning(
+                'ARI resources are not ready; missing repositories: %s',
+                ', '.join(sorted(missing_repositories)),
+            )
+            self.swagger.close()
+            return False
 
         channel_repository = self.repositories['channels']
         self.repositories['channels'] = CachingRepository(channel_repository)
         self.on_channel_event(
             'ChannelDestroyed', self.repositories['channels'].on_hang_up
         )
+        self._initialized = True
 
-        return self._initialized
+        return True
 
     def close(self):
         if not self._initialized:
