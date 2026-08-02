@@ -67,9 +67,7 @@ class TestConfdApplicationsCache(TestCase):
             old['uuid']: old,
             deleted['uuid']: deleted,
         }
-        self.confd.applications.list.return_value = {
-            'items': [unchanged, new, created]
-        }
+        self.confd.applications.list.return_value = {'items': [unchanged, new, created]}
 
         result = self.cache.refresh()
 
