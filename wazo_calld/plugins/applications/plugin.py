@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import logging
+import threading
+
 from wazo_amid_client import Client as AmidClient
 from wazo_auth_client import Client as AuthClient
 from wazo_confd_client import Client as ConfdClient
@@ -39,6 +42,39 @@ from .http import (
 from .notifier import ApplicationNotifier
 from .services import ApplicationService
 from .stasis import ApplicationStasis
+
+logger = logging.getLogger(__name__)
+
+
+class ApplicationRegistrationReconciler:
+    def __init__(self, callback, interval=15):
+        self._callback = callback
+        self._interval = interval
+        self._started = False
+        self._should_stop = threading.Event()
+
+    def start(self):
+        if self._started:
+            return
+        self._started = True
+        self._thread = threading.Thread(
+            target=self._run,
+            name='application_registration_reconciler',
+        )
+        self._thread.start()
+
+    def stop(self):
+        self._should_stop.set()
+        if self._started:
+            self._thread.join()
+
+    def _run(self):
+        while not self._should_stop.is_set():
+            try:
+                self._callback()
+            except Exception:
+                logger.exception('Failed to reconcile dynamic applications')
+            self._should_stop.wait(timeout=self._interval)
 
 
 class Plugin:
@@ -83,18 +119,22 @@ class Plugin:
             confd_apps_cache,
             moh_cache,
         )
+        application_reconciler = ApplicationRegistrationReconciler(
+            stasis.initialize
+        )
         confd_is_ready_thread = ConfdIsReadyThread(confd_client)
         startup_callback_collector = CallbackCollector()
         next_token_changed_subscribe(startup_callback_collector.new_source())
         ari.client_initialized_subscribe(startup_callback_collector.new_source())
         confd_is_ready_thread.subscribe(startup_callback_collector.new_source())
-        startup_callback_collector.subscribe(stasis.initialize)
+        startup_callback_collector.subscribe(application_reconciler.start)
 
         confd_apps_cache.created_subscribe(stasis.add_ari_application)
         confd_apps_cache.updated_subscribe(service.update_destination_node)
         confd_apps_cache.deleted_subscribe(stasis.remove_ari_application)
 
         confd_is_ready_thread.start()
+        pubsub.subscribe('stopping', lambda _: application_reconciler.stop())
         pubsub.subscribe('stopping', lambda _: confd_is_ready_thread.stop())
 
         api.add_resource(

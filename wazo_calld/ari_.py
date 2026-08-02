@@ -290,8 +290,8 @@ class CoreARI:
         if app in self._apps:
             return
 
-        self._apps.append(app)
         self.client.amqp.stasisSubscribe(applicationName=app)
+        self._apps.append(app)
         self.client.execute_app_registered_callbacks([app])
 
     def deregister_application(self, app):

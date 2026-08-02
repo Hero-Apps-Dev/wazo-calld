@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import logging
+import threading
 
 from wazo_calld.plugin_helpers.ari_ import Channel as _ChannelHelper
 from wazo_calld.plugin_helpers.ari_ import set_channel_var_sync
@@ -34,6 +35,9 @@ class ApplicationStasis:
         self._core_ari = ari
         self._service = service
         self._notifier = notifier
+        self._initialize_lock = threading.Lock()
+        self._events_subscribed = False
+        self._application_callbacks = set()
 
     def channel_dtmf_received(self, channel, event):
         application_uuid = AppNameHelper.to_uuid(event.get('application'))
@@ -81,14 +85,21 @@ class ApplicationStasis:
         self._notifier.call_updated(application, call)
 
     def initialize(self):
-        applications = self._confd_apps.list()
-        self._subscribe(applications)
-        self._register_applications(applications)
+        with self._initialize_lock:
+            applications = self._confd_apps.list()
+            if not self._events_subscribed:
+                self._subscribe()
+                self._events_subscribed = True
+            self._register_applications(applications)
         logger.debug('Stasis applications initialized')
 
     def add_ari_application(self, application):
         app_name = AppNameHelper.to_name(application['uuid'])
-        self._ari.on_application_registered(app_name, self._on_application_registered)
+        if app_name not in self._application_callbacks:
+            self._ari.on_application_registered(
+                app_name, self._on_application_registered
+            )
+            self._application_callbacks.add(app_name)
         self._core_ari.register_application(app_name)
         logger.debug('Stasis application added')
 
@@ -229,7 +240,7 @@ class ApplicationStasis:
             application, playback.json, channel_id, conversation_id
         )
 
-    def _subscribe(self, applications):
+    def _subscribe(self):
         self._ari.on_playback_event('PlaybackStarted', self.playback_started)
         self._ari.on_playback_event('PlaybackFinished', self.playback_finished)
         self._ari.on_channel_event('ChannelDtmfReceived', self.channel_dtmf_received)
@@ -242,14 +253,6 @@ class ApplicationStasis:
         self._ari.on_channel_event('ChannelLeftBridge', self.channel_left_bridge)
         self._ari.on_channel_event('ChannelStateChange', self.channel_state_change)
         self._ari.on_bridge_event('BridgeDestroyed', self.bridge_destroyed)
-
-        for application in applications:
-            app_uuid = application['uuid']
-            app_name = AppNameHelper.to_name(app_uuid)
-            self._ari.on_application_registered(
-                app_name, self._on_application_registered
-            )
-            self._core_ari.register_application(app_name)
 
     def _create_destinations(self, applications):
         logger.info('Creating destination nodes')
@@ -287,9 +290,8 @@ class ApplicationStasis:
             self._service.join_node(application_uuid, node_uuid, [channel.id])
 
     def _register_applications(self, applications):
-        apps_name = {AppNameHelper.to_name(app['uuid']) for app in applications}
-        for app_name in apps_name:
-            self._core_ari.register_application(app_name)
+        for application in applications:
+            self.add_ari_application(application)
 
     def _on_application_registered(self):
         applications = self._confd_apps.list()
