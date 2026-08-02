@@ -9,6 +9,7 @@ import urllib.parse
 import ari
 import ari.client
 import swaggerpy.http_client
+from ari.exceptions import ARINotFound
 from xivo.pubsub import Pubsub
 from xivo.status import Status
 
@@ -287,11 +288,22 @@ class CoreARI:
         self.client.execute_app_registered_callbacks(self._apps)
 
     def register_application(self, app):
-        if app in self._apps:
-            return
+        known_application = app in self._apps
+        if known_application:
+            try:
+                self.client.applications.get(applicationName=app)
+            except ARINotFound:
+                logger.warning(
+                    'Stasis application %s is cached but missing from Asterisk; '
+                    'registering it again',
+                    app,
+                )
+            else:
+                return
 
         self.client.amqp.stasisSubscribe(applicationName=app)
-        self._apps.append(app)
+        if not known_application:
+            self._apps.append(app)
         self.client.execute_app_registered_callbacks([app])
 
     def deregister_application(self, app):
