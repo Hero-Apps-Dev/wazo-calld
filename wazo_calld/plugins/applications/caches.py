@@ -87,6 +87,40 @@ class ConfdApplicationsCache:
     def list(self):
         return list(self._applications.values())
 
+    def refresh(self):
+        with self._cache_lock:
+            result = self._confd.applications.list(recurse=True)['items']
+            applications = {app['uuid']: app for app in result}
+            previous = self._cache
+            self._cache = applications
+
+        if previous is None:
+            return list(applications.values())
+
+        created = applications.keys() - previous.keys()
+        deleted = previous.keys() - applications.keys()
+        updated = {
+            uuid
+            for uuid in applications.keys() & previous.keys()
+            if applications[uuid] != previous[uuid]
+        }
+
+        for uuid in created:
+            application = applications[uuid]
+            for trigger in self._triggers['created']:
+                trigger(application)
+        for uuid in updated:
+            old_application = previous[uuid]
+            application = applications[uuid]
+            for trigger in self._triggers['updated']:
+                trigger(old_application, application)
+        for uuid in deleted:
+            application = previous[uuid]
+            for trigger in self._triggers['deleted']:
+                trigger(application)
+
+        return list(applications.values())
+
     def get(self, application_uuid):
         application = self._applications.get(str(application_uuid))
         if not application:
