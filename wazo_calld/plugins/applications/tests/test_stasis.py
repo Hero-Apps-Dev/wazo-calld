@@ -80,3 +80,15 @@ class TestApplicationStasisStartHandler(TestCase):
             self.app.stasis_start(s.event_object, event)
 
             fn.assert_called_once_with(uuid, None, s.event_object, event)
+
+    def test_initialize_reconciles_without_duplicate_subscriptions(self):
+        application = {'uuid': 'e3f9b7ef-3fa7-4240-88f1-e6f5c0945b9b'}
+        self.confd_apps_cache.list.return_value = [application]
+
+        with patch.object(self.app, '_subscribe') as subscribe:
+            self.app.initialize()
+            self.app.initialize()
+
+        subscribe.assert_called_once_with()
+        self.ari.client.on_application_registered.assert_called_once()
+        self.assertEqual(self.ari.register_application.call_count, 2)
