@@ -86,7 +86,7 @@ class ApplicationStasis:
 
     def initialize(self):
         with self._initialize_lock:
-            applications = self._confd_apps.list()
+            applications = self._confd_apps.refresh()
             if not self._events_subscribed:
                 self._subscribe()
                 self._events_subscribed = True
